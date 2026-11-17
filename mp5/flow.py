@@ -66,7 +66,6 @@ class FlowMatching(nn.Module):
         # TODO(student): Complete this function
         raise NotImplementedError
 
-    @torch.no_grad()
     def sample(self, x, *cond, n_steps=100):
         """
         Generate samples by simulating the ODE dX_t/dt = u_t(X_t) from t = 0 (noise) to t = 1 (data) with the
@@ -81,7 +80,9 @@ class FlowMatching(nn.Module):
         ts = torch.linspace(0, 1, n_steps + 1).tolist()
 
         traj = [x]
-        # TODO(student): Complete this function
+        with torch.no_grad():  # not a @torch.no_grad() decorator: Jupyter's autoreload cannot update decorated methods
+            # TODO(student): Complete this function
+            pass
         traj = torch.stack(traj, dim=0)
         return traj
 

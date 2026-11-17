@@ -219,7 +219,6 @@ class ImageFlowMatching(FlowMatching):
 # Q2.5             #
 ####################
 
-@torch.no_grad()
 def update_ema(ema_model, model, decay):
     """
     Update the exponential moving average (EMA) of the weights in place, as in the EMA equation in the notebook:
@@ -228,5 +227,6 @@ def update_ema(ema_model, model, decay):
     :param model: model being trained, must not be modified
     :param decay: EMA decay, close to 1 (e.g. 0.999)
     """
-    # TODO(student): Complete this function
-    raise NotImplementedError
+    with torch.no_grad():  # not a @torch.no_grad() decorator: Jupyter's autoreload cannot update decorated functions
+        # TODO(student): Complete this function
+        raise NotImplementedError

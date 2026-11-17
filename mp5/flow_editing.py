@@ -95,7 +95,7 @@ def cfg_velocity(model, x, t, emb, null_emb, scale):
 # Q3.1             #
 ####################
 
-@torch.no_grad()
+# No @torch.no_grad() here (Jupyter's autoreload cannot update decorated functions): euler_sample has it.
 def sdedit(field, z, eps, ts):
     """
     SDEdit: noise the images z back to time ts[0] with the noise eps, then integrate the velocity field to ts[-1].
