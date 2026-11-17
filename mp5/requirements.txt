@@ -1,0 +1,10 @@
+numpy
+matplotlib
+pillow
+torch
+torchvision
+gradescope-utils
+huggingface-hub
+pyarrow             # Q2: reading the AFHQ parquet files
+transformers==4.51.3  # Q3: Qwen3 text encoder of PixNerd (the version on Delta AI; newer ones fail with torch 2.5)
+jupyter             # the notebooks, and run_notebook.sbatch (jupyter nbconvert)
