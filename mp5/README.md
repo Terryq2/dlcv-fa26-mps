@@ -31,33 +31,6 @@
    clone to work on your assignment. You are responsible for preventing other
    students from copying your work.
 
-5. Change Log:
-   - 2026-11-12: Initial version.
-   - 2026-11-15: Removed Q4 denoising (old Q4.1, Q4.2, Q4.6) and the CFG
-     implementation (old Q4.3, now provided); Q4 renumbered to Q4.1-Q4.5.
-     Shortened Q2.5, Q3.8 (now 1 pt), Q3.9 and the Q4 write-ups. Q3: new
-     held-out cutoffs, `train_flow.py` never overwrites a run (`--resume` to
-     continue), 40-minute runs, and `run_notebook.sbatch` to run Part B and
-     Q4 as batch jobs on Delta AI. The Q3.4 test no longer needs Q3.6.
-   - 2026-11-16: Q3.7 (now Q2.7) is a controlled experiment with the
-     hyperparameters, graded manually in `MP5-report`, instead of an
-     autograded held-out loss: you no longer upload `flow_ema.pt`. There is
-     no test set anymore: `data/afhq64.pt` has training and validation
-     images, and you compare your runs with the validation loss. If you
-     prepared the data before, `load_afhq` converts your file automatically.
-     Removed the VAE (old Q1.1-Q1.2 and Q2.4, and `vae.py`), and renumbered
-     the questions: Q1 is now 2D flow matching (old Q2.1-Q2.3; old Q2.5 is
-     now Q1.4), Q2 is flow matching on images (old Q3), and Q3 is editing
-     (old Q4). The notebooks are now `Q1_flow_matching_2d.ipynb`,
-     `Q2_flow_matching.ipynb` and `Q3_flow_editing.ipynb`, and
-     `q3_helpers.py` is now `q2_helpers.py`. The Q3 questions are numbered
-     in the order of the notebook: Q3.2 is the SDEdit write-up (was Q3.4),
-     and the visual anagram and hybrid image code is Q3.3 and Q3.4 (was
-     Q3.2 and Q3.3).
-   - 2026-11-17: Removed hybrid images (Q3.4, `hybrid_velocity`). Q3.4 is
-     now your own visual anagram (4 pts, manually graded), and replaces the
-     old Q3.5 write-up. `MP5-code` is now 18 points.
-
    **Disclaimer about equations**: Web-based viewers (such as GitHub or GitLab)
    may **silently drop** math symbols (like square roots) in the notebooks.
    View the notebooks locally (VS Code, Jupyter Lab).
