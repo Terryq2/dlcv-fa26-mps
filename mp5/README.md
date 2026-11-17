@@ -100,7 +100,11 @@ report.
 4. We also have a slurm script for Q2 training, see `train_flow.sbatch`.
 
 #### If you are not using the Delta AI cluster
-1. Install pre-requisites in `requirements.txt`.
+1. Install pre-requisites in `requirements.txt`. On Windows with an NVIDIA
+   GPU, first install torch with CUDA using the command from
+   [pytorch.org](https://pytorch.org/get-started/locally/) (e.g.
+   `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130`):
+   plain `pip install torch` installs a CPU-only version on Windows.
 2. **Q2 dataset**: the Q2 notebook downloads
    [AFHQv2](https://huggingface.co/datasets/huggan/AFHQv2) from Hugging Face
    and prepares it, about 10 minutes. You only need to do this once.
