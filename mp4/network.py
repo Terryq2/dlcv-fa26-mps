@@ -65,7 +65,45 @@ class Anchors(nn.Module):
         width and height such that w*h = (size*stride)^2 and aspect_ratio = h/w
         """
         super(Anchors, self).__init__()
-        # TODO(student): Complete this function
+        self.stride = stride
+
+
+
+        #Aspect ratio: h/w
+
+        #Stride: How far I move in the original image if I move one unit in the fature map
+
+
+
+
+        # Initialize a tensor of shape 9*4
+
+        anchor_boxes = torch.zeros(9, 4)
+
+
+        # Have originally square boxes of 3 different sizes
+        # Want to modify them to have different aspect ratios but keep the area in the original image the same
+
+        
+        for i, size in enumerate(sizes):
+            # side lengths of the original square
+            original_side_lengths = size * stride
+
+            for j, aspect_ratio in enumerate(aspect_ratios):
+                scaling_factor_k = aspect_ratio ** (0.5)
+
+                height = original_side_lengths * scaling_factor_k
+                width = original_side_lengths / scaling_factor_k
+
+                new_x_min = -1 * 0.5 * width 
+                new_x_max = 0.5 * width
+                new_y_min = -1 * 0.5 * height
+                new_y_max = 0.5 * height
+
+                anchor_boxes[i*3+j] = torch.tensor((new_x_min, new_y_min, new_x_max, new_y_max))
+
+        self.register_buffer("anchor_boxes", anchor_boxes)
+
 
     def forward(self, x):
         """
@@ -106,17 +144,84 @@ class Anchors(nn.Module):
         when you create a tensor you put it on the same device that x is
         on.
         """
-        
-        # TODO(student): Complete this function
+        feature_map = x
 
-        return anchors
+        batch_size = feature_map.shape[0]
+        height_of_feature_map = feature_map.shape[2]
+        width_of_feature_map = feature_map.shape[3]
+        num_of_anchors = 9
+        
+
+        x_values = torch.arange(0, feature_map.shape[3], device=x.device)
+        y_values = torch.arange(0, feature_map.shape[2], device=x.device)
+        
+        # grid_x contains the x values at each (x,y) coordinate. The indexing is ij so every column
+        # contains the same x values
+        
+        # grid_y contains the y values at each (x,y) coordinate. The indexing ij so every row 
+        # contains the same y values
+
+        grid_y, grid_x = torch.meshgrid(y_values, x_values, indexing='ij')
+
+        # these extract the corners of every box and adds two dimensions to it so we have shape (9, 1, 1)
+        min_x = self.anchor_boxes[:, 0, None, None]
+        max_x = self.anchor_boxes[:, 2, None, None]
+
+        min_y = self.anchor_boxes[:, 1, None, None]
+        max_y = self.anchor_boxes[:, 3, None, None]
+
+        # This maps their coordinates to the coordinates of the input space.
+        center_x = grid_x * self.stride
+        center_y = grid_y * self.stride
+
+        # this broadcasts the element of each batch to each pixel location and adds them
+        # we have shapes (9, H, W)
+        new_x_min = min_x + center_x
+        new_x_max = max_x + center_x
+
+        new_y_min = min_y + center_y
+        new_y_max = max_y + center_y
+
+        # Now we stack them along the second dimension to have shape (9, 4, H, W)
+        anchor_ps = torch.stack([new_x_min, new_y_min, new_x_max, new_y_max], dim = 1)
+
+        # reshape them to have shape (9*4, H, W)
+        anchor_ps = anchor_ps.reshape(9*4, height_of_feature_map, width_of_feature_map)
+        return anchor_ps.repeat(batch_size, 1, 1, 1).to(x.device)
+        # return the anchors braodcasted across the batch size
+
+        # new_anchors = torch.zeros(batch_size, num_of_anchors*4, height_of_feature_map, width_of_feature_map)
+
+        # for anchor_box in range(num_of_anchors):
+        #     for corner in range(4):
+        #         for row in range(feature_map.shape[2]):
+        #             for col in range(feature_map.shape[3]):
+        #                 current_anchor_box = self.anchor_boxes[anchor_box]
+
+        #                 base_image_x = col * self.stride 
+        #                 base_image_y = row * self.stride
+
+
+        #                 current_anchor_point = 0
+
+
+        #                 if corner == 0 or corner == 2:
+        #                     current_anchor_point = current_anchor_box[corner] + base_image_x
+        #                 else:
+        #                     current_anchor_point = current_anchor_box[corner] + base_image_y
+
+        #                 new_anchors[0][anchor_box * 4 + corner][row][col] = current_anchor_point
+
+        # new_anchors = new_anchors.repeat(batch_size, 1, 1, 1)
+        # new_anchors = new_anchors.to(x.device)
+        # return new_anchors
+                
 
 
 class RetinaNet(nn.Module):
     def __init__(self, p67=False, fpn=False,num_anchors=9):
         super(RetinaNet, self).__init__()
-        self.resnet = [
-            create_feature_extractor(
+        self.resnet = create_feature_extractor(
                 resnet50(weights=ResNet50_Weights.IMAGENET1K_V2),
                 return_nodes={
                     "layer2.3.relu_2": "conv3",
@@ -124,8 +229,14 @@ class RetinaNet(nn.Module):
                     "layer4.2.relu_2": "conv5",
                 },
             )
-        ]
-        self.resnet[0].eval()
+
+        for param in self.resnet.parameters():
+            param.requires_grad = False
+
+        for name, param in self.resnet.named_parameters():
+            if name.startswith(("layer1.", "layer2.", "layer3.", "layer4.")):
+                param.requires_grad = True
+        
         self.cls_head, self.bbox_head = self.get_heads(9, num_anchors)
 
         self.p67 = p67
@@ -190,7 +301,6 @@ class RetinaNet(nn.Module):
     def to(self, device):
         super(RetinaNet, self).to(device)
         self.anchors.to(device)
-        self.resnet[0].to(device)
         return self
 
     def get_heads(self, num_classes, num_anchors, prior_prob=0.01):
@@ -268,8 +378,7 @@ class RetinaNet(nn.Module):
         return outs
 
     def forward(self, x):
-        with torch.no_grad():
-            feats = self.resnet[0](x)
+        feats = self.resnet(x)
 
         feats = self.get_ps(feats)
 

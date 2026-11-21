@@ -44,6 +44,10 @@ def compute_bbox_iou(bbox1, bbox2, dim=1):
     """
     bbox1 = bbox1.unsqueeze(1)
     bbox2 = bbox2.unsqueeze(0)
+
+    # print("bbox1 device:", bbox1.device)
+    # print("bbox2 device:", bbox2.device)
+
     max_min_x = torch.max(bbox1[...,0], bbox2[...,0])
     min_max_x = torch.min(bbox1[...,2], bbox2[...,2])
     max_min_y = torch.max(bbox1[...,1], bbox2[...,1])
@@ -99,10 +103,74 @@ def compute_targets(anchor, cls, bbox):
     other cases. This will make your code much more efficient and faster to
     train.
     """
+    # Args: 
+    #   (B, n, 4) number of ground truth boxes
+    #   (B, n, 1) number of ground truth classes
+    #   (B, A, 4) number of current anchor boxes, where A is the number of anchor boxes. 
+    
+
+    anchors = anchor.cuda()
+    bbox = bbox.cuda()
+    cls = cls.cuda()
+
+    batch_size = anchor.shape[0]
+    number_of_anchor_boxes = anchor.shape[1]
+
+    gt_cls = torch.zeros(
+        batch_size, number_of_anchor_boxes, 1,
+        device=anchors.device
+    )
+
+    gt_bboxes = torch.zeros(
+        batch_size, number_of_anchor_boxes, 4,
+        device=anchors.device
+    )
+
+
+    # print("anchors:", anchors.device)
+    # print("bbox:", bbox.device)
+    # print("cls:", cls.device)
+
+    for batch in range(batch_size):
+            current_batch_of_anchor_boxes = anchors[batch]
+            current_batch_of_gt_boxes = bbox[batch]
+            ious = compute_bbox_iou(current_batch_of_anchor_boxes,
+                                    current_batch_of_gt_boxes)
+
+
+
+            # print("ious", ious)
+            # print("anchors", current_batch_of_anchor_boxes)
+            # print("gt_boxes", current_batch_of_gt_boxes)
+
+
+            # (A, 1).            (A, 1)
+            max_ious_for_boxes, indices_where_they_occur = torch.max(ious, dim=1)
+
+            # print(ious)
+
+            background_mask = (max_ious_for_boxes < 0.4)
+            ignore_mask = (max_ious_for_boxes >= 0.4) & (max_ious_for_boxes < 0.5)
+            good_mask = (max_ious_for_boxes >= 0.5) & (max_ious_for_boxes <= 1)
+
+            # print("Background",background_mask)
+            # print("Ignor",ignore_mask)
+            # print("Good",good_mask)
+            # print(max_ious_for_boxes)
+            # print(indices_where_they_occur)
+            
+
+            gt_cls[batch, background_mask] = 0
+            gt_cls[batch, ignore_mask] = -1
+            gt_cls[batch, good_mask] = cls[batch][indices_where_they_occur[good_mask]].reshape(-1, 1).to(gt_cls.dtype)
+
+            gt_bboxes[batch, good_mask] = bbox[batch][indices_where_they_occur[good_mask]]
+
+
     
     # TODO(student): Complete this function
     
-    return gt_clss.to(torch.int), gt_bboxes
+    return gt_cls.to(torch.int), gt_bboxes
 
 def compute_bbox_targets(anchors, gt_bboxes):
     """
@@ -139,10 +207,54 @@ def compute_bbox_targets(anchors, gt_bboxes):
     too small. Therefore, our final formula will be
        delta_w = log(max(gt_bbox_width,1) / anchor_width)
     """
-    
-    # TODO(student): Complete this function
 
-    return torch.stack([delta_x, delta_y, delta_w, delta_h], dim=-1)
+    anchor_sizes = anchors[:, 2:] - anchors[:, :2]
+    gt_sizes = gt_bboxes[:, 2:] - gt_bboxes[:, :2]
+
+    anchor_centers = (anchors[:, :2] + anchors[:, 2:]) * 0.5
+    gt_centers = (gt_bboxes[:, :2] + gt_bboxes[:, 2:]) * 0.5
+
+    center_deltas = (gt_centers - anchor_centers) / anchor_sizes
+
+    size_deltas = torch.log(gt_sizes.clamp_min(1) / anchor_sizes)
+
+    return torch.cat((center_deltas, size_deltas), dim=1)
+
+    # anchors_size = anchors.shape[0]
+    # deltas = []
+
+    # for anchor in rsange(anchors_size):
+
+    #     (x_min, y_min, x_max, y_max) = anchors[anchor] 
+
+    #     anchor_center_x = (x_min + x_max) * 0.5
+    #     anchor_center_y = (y_min + y_max) * 0.5
+
+    #     anchor_width = (x_max - x_min)
+    #     anchor_height = (y_max - y_min)
+
+    #     (x_min_gt, y_min_gt, x_max_gt, y_max_gt) = gt_bboxes[anchor] 
+
+    #     gt_center_x = (x_min_gt + x_max_gt) * 0.5
+    #     gt_center_y = (y_min_gt + y_max_gt) * 0.5
+
+
+    #     gt_bbox_width = (x_max_gt - x_min_gt)
+    #     gt_bbox_height = (y_max_gt - y_min_gt)
+
+    #     delta_x = (gt_center_x - anchor_center_x) / anchor_width
+    #     delta_y = (gt_center_y - anchor_center_y) / anchor_height
+
+    #     delta_w = np.log(max(gt_bbox_width, 1) / anchor_width)
+    #     delta_h = np.log(max(gt_bbox_height, 1) / anchor_height)
+
+    #     deltas.append((delta_x, delta_y, delta_w, delta_h))
+
+    # deltas = torch.tensor(deltas)
+    # deltas = deltas.reshape(anchors_size, 4)
+
+    # print(deltas)
+    # return deltas
 
 def apply_bbox_deltas(boxes, deltas):
     """
@@ -154,7 +266,49 @@ def apply_bbox_deltas(boxes, deltas):
         
     """
     # TODO(student): Complete this function
-    return new_boxes
+    deltas = deltas.to(boxes.device)
+
+    top_left = boxes[:, :2]
+    bottom_right = boxes[:, 2:]
+
+    sizes = bottom_right - top_left
+    centers = (top_left + bottom_right) * 0.5
+
+    new_centers = centers + sizes * deltas[:, :2]
+    half_sizes = 0.5 * sizes * torch.exp(deltas[:, 2:])
+
+    return torch.cat(
+        (new_centers - half_sizes, new_centers + half_sizes),
+        dim=1,
+    )
+
+
+    # # (pw, ph)
+    # anchor_box_sizes = boxes[:, 2:] - boxes[:, :2]
+
+    # # (pw*tx, ph*ty)
+    # scaled = anchor_box_sizes * deltas[:, :2]
+   
+
+    # # (px, py)
+    # anchor_box_centers = (boxes[:, 2:] + boxes[:, :2]) * 0.5
+
+
+    # new_sizes = anchor_box_sizes *  torch.exp(deltas[:, 2:])
+
+    # # (bx, by)
+    # new_centers = anchor_box_centers + scaled
+
+    # x_min = new_centers[:, :1] - (0.5 * new_sizes[:, :1])
+    # x_max = new_centers[:, :1] + (0.5 * new_sizes[:, :1])
+
+    # y_min = new_centers[:, 1:] - (0.5 * new_sizes[:, 1:])
+    # y_max = new_centers[:, 1:] + (0.5 * new_sizes[:, 1:])
+
+    # s = torch.stack([x_min, y_min, x_max, y_max], dim=1).reshape(x_min.shape[0], 4)
+
+
+    return s
 
 def nms(bboxes, scores, threshold=0.5):
     """
@@ -177,4 +331,31 @@ def nms(bboxes, scores, threshold=0.5):
     return is of type int or long(since it will be used as an index to select
     the relevant bboxes to output).
     """
-    # TODO(student): Complete this function
+    order = scores.argsort(descending=True)
+    if order.numel() == 0:
+        return order
+
+    keep = []
+
+
+    # If the current list of boxes are non empty keep doing
+    while order.numel() > 0:
+
+        # Take out the best score
+        keep.append(order[0])
+
+        remaining = order[1:]
+
+        if remaining.numel() == 0:
+            break
+
+        # the box of the most confident score
+        best_box = bboxes[order[:1]]
+
+        # compute all pairs of ious
+        all_pairs_ious = compute_bbox_iou(best_box, bboxes[remaining]).squeeze(0)
+
+        # keep the entries where ious are better than some threshold
+        order = remaining[all_pairs_ious <= threshold]
+
+    return torch.stack(keep)

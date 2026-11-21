@@ -12,7 +12,7 @@ class LossFunc(nn.Module):
         classification_losses = []
         regression_losses = []
 
-        anchor = anchors[0, :, :]
+        anchor = anchors[0, :, :].to(device)
 
         for j in range(batch_size):
 
@@ -24,36 +24,44 @@ class LossFunc(nn.Module):
 
             classification = torch.clamp(classification, 1e-4, 1.0 - 1e-4)
 
-            positive_indices = (targets_cls > 0).view(-1)
-            non_negative_indices = (targets_cls >= 0).view(-1)
+            labels = targets_cls.reshape(-1)
+
+
+            
+            positive_indices = labels > 0
+            valid_indices = labels >= 0
             num_positive_anchors = positive_indices.sum()
 
+            probs = classification.float().clamp(1e-4, 1.0 - 1e-4)
+            targets = torch.zeros_like(probs, dtype=torch.bool)
+            targets[positive_indices, labels[positive_indices].long() - 1] = True
+
+            probs = probs[valid_indices]
+            targets = targets[valid_indices]
+
+            p_t = torch.where(targets, probs, 1.0 - probs)
+            alpha_t = torch.where(targets, 0.25, 0.75)
+            focal_loss = -alpha_t * (1.0 - p_t).square() * p_t.log()
+
+            classification_losses.append(
+                focal_loss.sum() / num_positive_anchors.clamp_min(1)
+            )
+
             if num_positive_anchors == 0:
-                bce = -(torch.log(1.0 - classification))
-                cls_loss = bce
-                classification_losses.append(cls_loss.sum())
-                regression_losses.append(torch.tensor(0).float().to(device))
+                regression_losses.append(regression.new_zeros(()))
                 continue
-
-            
-            # compute the loss for classification
-            targets = torch.ones(classification.shape) * -1
-            targets = targets.to(device)
-            targets[non_negative_indices, :] = 0
-            targets[positive_indices, targets_cls[positive_indices] - 1] = 1
-
-            bce = -(targets * torch.log(classification) + (1.0 - targets) * torch.log(1.0 - classification))
-            cls_loss = bce
-            
-
-            cls_loss = torch.where(torch.ne(targets, -1.0), cls_loss, torch.zeros(cls_loss.shape).to(device))
-            classification_losses.append(cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))
 
             # compute the loss for regression
             targets_bbox = targets_bbox[positive_indices, :]
+
             bbox_reg_target = compute_bbox_targets(anchor[positive_indices, :].reshape(-1,4), targets_bbox.reshape(-1,4))
             targets = bbox_reg_target.to(device)
-            regression_diff = torch.abs(targets - regression[positive_indices, :])
-            regression_losses.append(regression_diff.mean())
+            # regression_diff = torch.abs(targets - regression[positive_indices, :])
+            regression_loss = torch.nn.functional.smooth_l1_loss(
+                regression[positive_indices, :],
+                targets,
+                beta=1.0 / 9.0
+            )
+            regression_losses.append(regression_loss)
 
         return torch.stack(classification_losses).mean(dim=0, keepdim=True), torch.stack(regression_losses).mean(dim=0, keepdim=True)

@@ -250,3 +250,22 @@ def collater(data):
     return padded_imgs, cls_padded.to(torch.int64), bboxes_padded, is_crowd, image_id, resize_factor
 
 
+class RandomHorizontalFlip:
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, sample):
+        image, bboxes, cls, is_crowd, image_id = sample
+
+        if np.random.rand() < self.p:
+            image = np.ascontiguousarray(image[:, ::-1, :])
+
+            width = image.shape[1]
+
+            x1 = bboxes[:, 0].copy()
+            x2 = bboxes[:, 2].copy()
+
+            bboxes[:, 0] = width - x2
+            bboxes[:, 2] = width - x1
+
+        return image, bboxes, cls, is_crowd, image_id
