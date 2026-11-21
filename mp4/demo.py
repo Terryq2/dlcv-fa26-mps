@@ -212,7 +212,7 @@ def main(_):
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "scheduler": scheduler.state_dict(),
-            }, f"{FLAGS.output_dir}/checkpoint_{i+1}.pth")
+            }, f"{FLAGS.output_dir}/model_{i+1}.pth")
             
         if (i+1) % FLAGS.val_every == 0 or (i+1) == FLAGS.max_iter:
             logging.info(f'Validating at {i+1} iterations.')
