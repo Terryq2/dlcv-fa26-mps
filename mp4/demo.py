@@ -207,12 +207,7 @@ def main(_):
 
 
         if (i+1) % FLAGS.save_every == 0:
-            torch.save({
-                "iteration": i + 1,
-                "model": model.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "scheduler": scheduler.state_dict(),
-            }, f"{FLAGS.output_dir}/model_{i+1}.pth")
+            torch.save(model.state_dict(), f'{FLAGS.output_dir}/model_{i+1}.pth')
             
         if (i+1) % FLAGS.val_every == 0 or (i+1) == FLAGS.max_iter:
             logging.info(f'Validating at {i+1} iterations.')
